@@ -1,0 +1,69 @@
+read -p "Enter the directory path to be monitored: " dir_path
+
+
+read -p "Enter a regular expression pattern to match the file names to be monitored: " regex_pattern
+
+if ! echo "" | grep -E $regex_pattern >/dev/null 2>&1; then
+
+	echo "Invalid regular expression pattern."
+
+	exit 1
+
+fi
+
+
+
+function file_change_detected {
+
+changed_file=$1
+
+
+
+if grep -q "error" $changed_file; then
+
+	error_info=$(grep "error" $changed_file | awk '{print $1, $2, $4}')
+
+	echo "Error found in $changed_file: $error_info"
+
+
+	backup_dir=./backup
+
+	mkdir -p $backup_dir
+
+	cp $changed_file $backup_dir
+
+
+	sed -i 's/error/processed/g' $changed_file
+
+
+if [[ $(wc -l < $changed_file) -gt 10 ]]; then
+
+	head -n 5 $changed_file > $changed_file.head
+
+	tail -n 5 $changed_file > $changed_file.tail
+
+fi
+
+backup_file=./backup_$(date +%Y%m%d%H%M%S).tar.gz
+
+tar -czf $backup_file $backup_dir
+
+echo "Backup saved to $backup_file"
+
+fi
+
+}
+
+inotifywait -m -r -e modify,create,delete --format "%w%f" $dir_path |
+
+while read changed_file; do
+
+	if echo $changed_file | grep -qE $regex_pattern; then
+
+		file_change_detected $changed_file
+
+	fi
+
+done
+
+
